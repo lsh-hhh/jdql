@@ -1,7 +1,7 @@
 /*
 CK作废，不时之需，希望大家用不到！！！
 */
-const $ = new Env('作废CK');
+const $ = new Env('作废CK1');
 const notify = $.isNode() ? require('./sendNotify') : '';
 //Node.js用户请在jdCookie.js处填写京东ck;
 const jdCookieNode = $.isNode() ? require('./jdCookie.js') : '';
