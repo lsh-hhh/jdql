@@ -2,7 +2,7 @@
 #15 3,23 * * * jd_sharecode.sh 
 #new Env('获取互助码');
 ## Build 20220325-001-test
-grep '6dylan6_1008' /ql/data/config/task_before.sh >/dev/null 2>&1 || grep '6dylan6_1008' /ql/config/task_before.sh > /dev/null 2>&1
+grep '6dylan6_1116' /ql/data/config/task_before.sh >/dev/null 2>&1 || grep '6dylan6_1116' /ql/config/task_before.sh > /dev/null 2>&1
 if [[ $? != 0 ]];then
  cp /ql/repo/6dylan6_jdpro/docker/task_before.sh /ql/config/ >/dev/null 2>&1 || cp /ql/data/repo/6dylan6_jdpro/docker/task_before.sh /ql/data/config/
 fi
@@ -175,7 +175,7 @@ name_config=(
 )
 
 name_chinese=(
-  东东农场
+  东东农场-任务
   东东萌宠
   京东种豆得豆
   京喜工厂

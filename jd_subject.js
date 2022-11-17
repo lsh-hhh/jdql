@@ -1,11 +1,13 @@
 
 /*
-穿越寻宝组队奖励领取
-10 10 10 10 * jd_cxxb_award.js
-updatetime：2022/10/23
- */
+入口：https://prodev.m.jd.com/mall/active/4JVvmjx2XwTx7cB64eAFPds1xCox/index.html
+点赞5次抽奖1-5豆，完成后瓜分都池；
+定时随机！
+updatetime:2022/11/14 
+*/
 
-const $ = new Env('穿行组队奖励领取');
+const $ = new Env('短视频点赞抽奖');
+const dylan = require('./function/dylan.js')
 const notify = $.isNode() ? require('./sendNotify') : '';
 const jdCookieNode = $.isNode() ? require('./jdCookie.js') : '';
 let jdNotify = true;
@@ -19,18 +21,20 @@ if ($.isNode()) {
 } else {
 	cookiesArr = [$.getdata('CookieJD'), $.getdata('CookieJD2'), ...jsonParse($.getdata('CookiesJD') || "[]").map(item => item.cookie)].filter(item => !!item);
 }
+let fff = Math.random()+1;
 !(async () => {
 	if (!cookiesArr[0]) {
 		$.msg($.name, '【提示】请先获取京东账号一cookie\n直接使用NobyDa的京东签到获取', 'https://bean.m.jd.com/bean/signIndex.action', { "open-url": "https://bean.m.jd.com/bean/signIndex.action" });
 		return;
 	}
-	for (let i = 0; i < cookiesArr.length; i++) {
+	for (let i = 0; i < 15; i++) {
 		if (cookiesArr[i]) {
 			cookie = cookiesArr[i];
 			$.UserName = decodeURIComponent(cookie.match(/pt_pin=([^; ]+)(?=;?)/) && cookie.match(/pt_pin=([^; ]+)(?=;?)/)[1])
 			$.index = i + 1;
 			$.isLogin = true;
 			$.nickName = '';
+			UA = require('./USER_AGENTS').UARAM();
 			await TotalBean();
 			console.log(`\n******开始【京东账号${$.index}】${$.nickName || $.UserName}*********\n`);
 			if (!$.isLogin) {
@@ -38,13 +42,36 @@ if ($.isNode()) {
 				if ($.isNode()) {
 					await notify.sendNotify(`${$.name}cookie已失效 - ${$.UserName}`, `京东账号${$.index} ${$.UserName}\n请重新登录获取cookie`);
 				}
-				continue;
+				continue
 			}
-			await run('promote_pk_getAmountForecast');
-			await $.wait(1000);
-			await run('promote_pk_receiveAward');
-			await $.wait(1000);
-			await run('promote_pk_divideScores');
+			$.hotnum = 0;
+			for (let i = 0; i < 4; i++) {
+				if ($.hotnum > 0) fff = Math.random()+1;
+                if ($.hotnum > 1) break;
+				let x = 'recommend';
+				let y = Math.floor(Math.random()*20);
+				(i > 0) ? (x = 'joined') : '';
+				await homepage(x);
+				await $.wait(1000);
+				if ($.listData == null) continue;
+				for (let item of $.listData) {
+					if ($.hotnum > 0) fff = Math.random()+1;
+                    if ($.hotnum > 1) break;
+					if (item.remainGradNum == 0) continue;
+					console.log('\n开始主题：'+item.subjectTitle);
+                    UA = require('./USER_AGENTS').UARAM();
+					await channelBff_querySubject(y + 1, item.subjectId);
+					await $.wait(1000);
+					for (let j of $.contentList) {
+						if ($.hotnum > 0) fff = Math.random()+1;
+                        if ($.hotnum > 1) break;
+						//console.log(j.contentId, item.subjectId);
+						await subject_interactive_done(j.contentId, item.subjectId);
+						await $.wait(parseInt(Math.random() * 3000 + 3000, 10))
+					}
+					await $.wait(1000);
+				}
+			}
 			await $.wait(2000)
 		}
 	}
@@ -56,54 +83,140 @@ if ($.isNode()) {
 		$.done();
 	})
 
-function run(fn) {
-	let body = `functionId=${fn}&client=m&clientVersion=-1&appid=signed_wh5&body={}`;
-	let opt = {
-		url: `https://api.m.jd.com/client.action?functionId=${fn}`,
-		body,
-		headers: {
-			'Cookie': cookie,
-			'Content-Type': 'application/x-www-form-urlencoded',
-			"User-Agent": $.UA,
-			'Origin': 'https://wbbny.m.jd.com',
-			'Accept-Language': 'zh-cn',
-			'Accept-Encoding': 'gzip, deflate, br',
-		},
-		timeout: 30000
-	}
-	return new Promise((resolve) => {
-		$.post(opt, async (err, resp, data) => {
+
+
+async function channelBff_querySubject(page, id) {
+	return new Promise(async (resolve) => {
+		$.post(taskUrl('channelBff_querySubject', { "page": page, "pageSize": "15", "scene": "", "subjectId": id, "tabId": "-1", "tabType": "2", "topContentId": "", "topContents": "" }), async (err, resp, data) => {
 			try {
 				if (err) {
 					console.log(`${JSON.stringify(err)}`)
-					console.log(`请求失败，请检查网路重试`)
+					console.log(` API请求失败，请检查网路重试`)
 				} else {
-					if (safeGet(data)) {
-						data = JSON.parse(data);
-						if (data.code === 0) {
-							if (data.data && data.data.bizCode === 0) {
-								if (fn === 'promote_pk_receiveAward') {
-									console.log('领取组队红包：' + data.data.result.value);
-								} else if (fn === 'promote_pk_divideScores'){
-									console.log('领取组队金币：' + data.data.result.produceScore)
-								}
-							} else {
-								console.log(data.data.bizMsg);
-
-							}
-						} else {
-							console.log(`失败:${JSON.stringify(data)}\n`)
-							resolve()
-						}
+					data = JSON.parse(data)
+					if (data.busiCode == '0') {
+						//console.log(data)
+						$.contentList = data.result.subjectVo.contentList;
+					} else {
+						console.log(data.message)
 					}
 				}
 			} catch (e) {
 				$.logErr(e, resp)
 			} finally {
-				resolve(data);
+				resolve(data)
 			}
 		})
 	})
+}
+
+async function subject_interactive_get(cid, sid) {
+	return new Promise(async (resolve) => {
+		$.post(taskUrl('subject_interactive_get', '{"contentId":"272271439","monitorSurce":"videoDetail","style":11,"subjectId":"10002535"}'), async (err, resp, data) => {
+			try {
+				if (err) {
+					console.log(`${JSON.stringify(err)}`)
+					console.log(` API请求失败，请检查网路重试`)
+				} else {
+					data = JSON.parse(data)
+					console.log(data);
+					if (data.busiCode == '0') {
+
+					} else {
+						console.log(data.message)
+					}
+				}
+			} catch (e) {
+				$.logErr(e, resp)
+			} finally {
+				resolve(data)
+			}
+		})
+	})
+}
+
+async function subject_interactive_done(cid, sid) {
+	return new Promise(async (resolve) => {
+		$.post(taskUrl('subject_interactive_done', `{"contentId":"${cid}","subjectId":"${sid}"}`), async (err, resp, data) => {
+			try {
+				if (err) {
+					console.log(`${JSON.stringify(err)}`)
+					console.log(` API请求失败，请检查网路重试`)
+				} else {
+					data = JSON.parse(data)
+					//console.log(data);
+					if (data.busiCode == '0') {
+						if (data.data.rewardsInfo) {
+							console.log('获得：' + data.data.rewardsInfo.rewardMsg)
+						} else {
+							console.log(data.message)
+						}
+						$.hotnum = 0;
+					} else if (data.message.indexOf('火爆') > -1) {
+						console.log('火爆了，跳出');
+                        await $.wait(10000);
+						$.hotnum++;
+					} else {
+						console.log(data.message)
+					}
+				}
+			} catch (e) {
+				$.logErr(e, resp)
+			} finally {
+				resolve(data)
+			}
+		})
+	})
+}
+
+async function homepage(type) {
+	let opt = {
+		url: `https://api.m.jd.com/subject_challenge_main`,
+		body: `appid=contenth5_common&functionId=subject_challenge_main&body={"page":1,"pageSize":10,"tabSource":"${type}"}&client=h5&clientVersion=11.3.0`,
+		headers: {
+			'Host': 'api.m.jd.com',
+			'Origin': 'https://h5.m.jd.com',
+			'Referer': 'https://h5.m.jd.com/',
+			'Content-Type': 'application/x-www-form-urlencoded',
+			'User-Agent': UA,
+			'Cookie': cookie
+		}
+	}
+	return new Promise(async (resolve) => {
+		$.post(opt, async (err, resp, data) => {
+			try {
+				if (err) {
+					console.log(`${JSON.stringify(err)}`)
+					console.log(` API请求失败，请检查网路重试`)
+				} else {
+					data = JSON.parse(data)
+					if (data.busiCode == 0) {
+						$.listData = data.result.data.listData;
+					} else {
+						console.log(data.message)
+					}
+				}
+			} catch (e) {
+				$.logErr(e, resp)
+			} finally {
+				resolve(data)
+			}
+		})
+	})
+}
+
+function taskUrl(fn, body) {
+	body = dylan.getbody(fn, body, fff);
+	//console.log(body)
+	return {
+		url: `https://api.m.jd.com/client.action?functionId=${fn}&${body}`,
+		headers: {
+			'Content-Type': 'application/json',
+			'User-Agent': UA,
+			'Cookie': cookie
+		},
+		timeout: 10000
+	}
 }
 
 function TotalBean() {
