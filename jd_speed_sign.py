@@ -16,16 +16,18 @@
 # 京东极速版 = type=cron,cronexp="15 2,14 * * *",wake-system=1,timeout=33600,script-path=jd_speed_sign.js
 # ========小火箭======
 # 京东极速版 = type=cron,script-path=jd_speed_sign.js, cronexpr="15 2,14 * * *", timeout=33600, enable=True
+import calendar
 import datetime
 import json
 import logging
+import random
 import time
 
 import requests
 
-import sendNotify
+# import sendNotify
 
-notify = sendNotify
+# notify = sendNotify
 # Node.js用户请在jdCookie.js处填写京东ck;
 # jdCookieNode = require('./jdCookie.js') : ''
 jdCookieNode = ''
@@ -49,8 +51,6 @@ actCode = 'visa-card-001'
 #     user_info.msg(user_info.name, '【提示】请先获取京东账号一cookie\n直接使用NobyDa的京东签到获取', 'https://bean.m.jd.com/bean/signIndex.action', {"open-url": "https://bean.m.jd.com/bean/signIndex.action"});
 #     return;
 #   }
-#    date = datetime.datetime.now()
-  user_info.last_day = new Date(date.getFullYear(), date.getMonth()+1, 0).getDate() == date.getDate()
 #   for (i = 0; i < cookiesArr.length; i++) {
 #     if (cookiesArr[i]) {
 #       cookie = cookiesArr[i];
@@ -102,6 +102,10 @@ class UserInfo(object):
 
 user_info = UserInfo()
 
+date = datetime.datetime.now().date()
+week_day, month_count_day = calendar.monthrange(date.year, date.month)
+last_month_day = datetime.date(date.year, date.month, day=month_count_day)
+user_info.last_day = last_month_day == date
 
 def safe_get(content):
   try:
@@ -131,9 +135,9 @@ def jd_global():
     query_joy()
     #await signInit()
     cash()
-    if last_day:
+    if last_month_day:
       print('月底了,自动领下单红包奖励')
-      orderReward()
+      order_reward()
     show_msg()
   except Exception as e:
     logging.exception(e)
@@ -387,7 +391,7 @@ def cash():
 
 #大转盘
 def wheels_home():
-    resp = requests.get(assemble_request('wheelsHome',
+    resp = requests.get(assemble_get_request('wheelsHome',
       {"linkId":"toxw9c5sy9xllGBr3QFdYg"}))
     print("resp = ", resp.content)
     try:
@@ -406,7 +410,7 @@ def wheels_home():
 
 #大转盘
 def wheels_lottery():
-  resp = requests.get(assemble_request('wheelsLottery',
+  resp = requests.get(assemble_get_request('wheelsLottery',
                                        {"linkId": "toxw9c5sy9xllGBr3QFdYg"}))
   print("resp = ", resp.content)
   try:
@@ -423,242 +427,180 @@ def wheels_lottery():
         
 #大转盘任务
 def ap_task_ist():
-  resp = requests.get(assemble_request('apTaskList',
+  resp = requests.get(assemble_get_request('apTaskList',
                                        {"linkId": "toxw9c5sy9xllGBr3QFdYg"}))
   print("resp = ", resp.content)
   try:
     if safe_get(resp.content):
       data = json.loads(resp.content)
       if data.code == 0:
-        for task in data.data:
+        for TASK in data.data:
           # {"linkId":"toxw9c5sy9xllGBr3QFdYg","taskType":"SIGN","taskId":67,"channel":4}
-          if !task.taskFinished & task.taskType in['SIGN', 'BROWSE_CHANNEL']:
-            print(f'去做任务{task.taskTitle}')
-            apdo_task(task.taskType, task.id, 4, task.taskSourceUrl)
+          if not TASK.taskFinished & TASK.taskType in ['SIGN', 'BROWSE_CHANNEL']:
+            print(f'去做任务{TASK.taskTitle}')
+            ap_do_task(TASK.taskType, TASK.id, 4, TASK.taskSourceUrl)
+  except Exception as ex:
+    logging.exception(ex)
+
+
+#大转盘做任务
+def ap_do_task(taskType, taskId, channel, itemId):
+  # print({"linkId":"toxw9c5sy9xllGBr3QFdYg","taskType":taskType,"taskId":taskId,"channel":channel,"itemId":itemId})
+  resp = requests.get(assemble_get_request('apDoTask',
+                                       {"linkId": "toxw9c5sy9xllGBr3QFdYg", "taskType": taskType, "taskId": taskId,
+                                        "channel": channel, "itemId": itemId}))
+  print("resp = ", resp.content)
+  try:
+    if safe_get(resp.content):
+      data = json.loads(resp.content)
+      if data.code == 0 & data.data & data.data.finished:
+        print(f'任务完成成功')
+      else:
+        print(json.dumps(data))
+  except Exception as e:
+    logging.exception(e)
+        
+        
+#红包大富翁
+def rich_man_index():
+  resp = requests.get(assemble_request('richManIndex', {"actId": "hbdfw", "needGoldToast": "True"}))
+  print("resp = ", resp.content)
+  try:
+    if safe_get(resp.content):
+      data = json.loads(resp.content)
+      if data.code == 0 & data.data & data.data.userInfo:
+        print(f'用户当前位置：{data.data.userInfo.position}，剩余机会：{data.data.userInfo.randomTimes}')
+        times = data.data.userInfo.randomTimes
+        while times >= 0:
+          shoot_rich_man_dice()
+          times -= 1
   except Exception as e:
     logging.exception(e)
 
 
-#大转盘做任务
-def apdo_task(taskType,taskId,channel,itemId) {
-  #print({"linkId":"toxw9c5sy9xllGBr3QFdYg","taskType":taskType,"taskId":taskId,"channel":channel,"itemId":itemId})
-  
-    requests.get(assemble_request('apdo_task',
-      {"linkId":"toxw9c5sy9xllGBr3QFdYg","taskType":taskType,"taskId":taskId,"channel":channel,"itemId":itemId}),
-      
-        try:
-          if err:
-            print(f'{json.dumps(err)}')
-            print(f'{user_info.name} API请求失败，请检查网路重试')
-          else:
-            if safe_get(resp.content):
-              data = json.loads(resp.content)
-              if(data.code ==0 & data.data & data.data.finished){
-                print(f'任务完成成功')
-              else:
-                print(json.dumps(data))
-              }
-            }
-          }
-        except Exception as e:
-          logging.exception(e)
-        } finally {
-          resolve(data);
-        }
-      })
-  })
-}
 #红包大富翁
-def richManIndex() {
-  
-    requests.get(assemble_request('richManIndex', {"actId":"hbdfw","needGoldToast":"True"})
-      try:
-        if err:
-          print(f'{json.dumps(err)}')
-          print(f'{user_info.name} API请求失败，请检查网路重试')
-        else:
-          if safe_get(resp.content):
-            data = json.loads(resp.content)
-            if(data.code ==0 & data.data & data.data.userInfo){
-              print(f'用户当前位置：{data.data.userInfo.position}，剩余机会：{data.data.userInfo.randomTimes}')
-              while(data.data.userInfo.randomTimes--){
-                shootRichManDice()
-              }
-            }
-          }
-        }
-      except Exception as e:
-        logging.exception(e)
-      } finally {
-        resolve(data);
-      }
-    })
-  })
-}
-#红包大富翁
-def shootRichManDice() {
-  
-    requests.get(assemble_request('shootRichManDice', {"actId":"hbdfw"})
-      try:
-        if err:
-          print(f'{json.dumps(err)}')
-          print(f'{user_info.name} API请求失败，请检查网路重试')
-        else:
-          if safe_get(resp.content):
-            data = json.loads(resp.content)
-            if(data.code ==0 & data.data & data.data.rewardType & data.data.couponDesc){
-              message += `红包大富翁抽奖获得：【{data.data.couponUsedValue}-{data.data.rewardValue} {data.data.poolName}】\n`
-              print(f'红包大富翁抽奖获得：【{data.data.couponUsedValue}-{data.data.rewardValue} {data.data.poolName}】')
-            else:
-              print(f'红包大富翁抽奖：获得空气')
-            }
-          }
-        }
-      except Exception as e:
-        logging.exception(e)
-      } finally {
-        resolve(data);
-      }
-    })
-  })
-}
-def orderReward(type) {
-  t = +datetime.datetime.now()
-  var headers = {
+def shoot_rich_man_dice():
+  resp = requests.get(assemble_request('shootRichManDice', {"actId": "hbdfw"}))
+  try:
+    if safe_get(resp.content):
+      data = json.loads(resp.content)
+      if data.code == 0 & data.data & data.data.rewardType & data.data.couponDesc:
+        message += f'红包大富翁抽奖获得：【{data.data.couponUsedValue}-{data.data.rewardValue} {data.data.poolName}】\n'
+        print(f'红包大富翁抽奖获得：【{data.data.couponUsedValue}-{data.data.rewardValue} {data.data.poolName}】')
+      else:
+        print(f'红包大富翁抽奖：获得空气')
+  except Exception as ex:
+    logging.exception(ex)
+
+
+def order_reward(type):
+  timestamp = int(time.time() * 1000)
+  headers = {
     'Host': 'api.m.jd.com',
     'accept': 'application/json, text/plain, */*',
     'content-type': 'application/x-www-form-urlencoded',
     'origin': 'https://palace.m.jd.com',
     'accept-language': 'zh-cn',
-    'user-agent': user_info.isNode() ? (process.env.JS_USER_AGENT ? process.env.JS_USER_AGENT : (require('./JS_USER_AGENTS').USER_AGENT)) : (user_info.getdata('JSUA') ? user_info.getdata('JSUA') : "'jdltapp;iPad;3.1.0;14.4;network/wifi;Mozilla/5.0 (iPad; CPU OS 14_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148;supportJDSHWK/1"),
+    'user-agent': "'jdltapp;iPad;3.1.0;14.4;network/wifi;Mozilla/5.0 (iPad; CPU OS 14_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148;supportJDSHWK/1",
     'referer': 'https://palace.m.jd.com/?lng=110.917107&lat=22.2706&sid=abefac3cfbcb550b542e4c064dbcabfw&un_area=19_1684_1687_6233',
     'Cookie': cookie
-  };
-  if (type) {
-    var dataString = `functionId=OrderRewardService&body={"method":"receiveReward","data":{"orderQty":{type}}}&_t={t}&appid=market-task-h5&eid=`;
-  else:
-    var dataString = `functionId=OrderRewardService&body={"method":"queryRewards","data":{}}&_t={t}&appid=market-task-h5&eid=`;
   }
-  var options = {
-    url: `https://api.m.jd.com/`,
-    headers: headers,
-    body: dataString
-  };
-  user_info.post(options
-    try:
-      if err:
-        print(f'{json.dumps(err)}')
-        print(f'orderReward API请求失败，请检查网路重试')
-      else:
-        if safe_get(resp.content):
-          data = json.loads(resp.content)
-          if (data.code == 0 & data.isSuccess) {
-            if (data.data.details) {
-              user_info.details = data.data.details
-              for (item of user_info.details) {
-                if (item.status == 2) {
-                  print(f'\n检测到【下单领红包】有奖励可领取，开始领取奖励')
-                  orderReward(item.orderQty);
-                  user_info.wait(2000)
-                } else if (item.status == 1) {
-                  print(f'\n【下单领红包】暂无奖励可领取，再下${data.data.needOrderQty}单可领取${data.data.rewardAmount}元')
-                  break
-                }
-              }
-            else:
-              if (data.code == 0) {
-                print(f'奖励领取结果，获得${data.data.rewardAmount}元')
-              else:
-                print(f'奖励领取结果：获得${json.dumps(data)}')
-              }
-            }
+  data_string = ''
+  if type:
+    data_string = 'functionId=OrderRewardService&body={"method":"receiveReward","data":{"orderQty":' + type + '}}&_t=' + timestamp + '&appid=market-task-h5&eid='
+  else:
+    data_string = 'functionId=OrderRewardService&body={"method":"queryRewards","data":{}}&_t={t}&appid=market-task-h5&eid='
+  url_str = 'https://api.m.jd.com/'
+
+  resp = requests.post(url_str, headers=headers, cookies=cookie, data=data_string)
+  try:
+    if safe_get(resp.content):
+      data = json.loads(resp.content)
+      if data.code == 0 & data.isSuccess:
+        if data.data.details:
+          user_info.details = data.data.details
+          for item in user_info.details:
+            if item.status == 2:
+              print(f'\n检测到【下单领红包】有奖励可领取，开始领取奖励')
+              order_reward(item.orderQty);
+              user_info.wait(2000)
+            elif item.status == 1:
+              print(f'\n【下单领红包】暂无奖励可领取，再下${data.data.needOrderQty}单可领取${data.data.rewardAmount}元')
+              break
+        else:
+          if data.code == 0:
+            print(f'奖励领取结果，获得${data.data.rewardAmount}元')
           else:
-            print(f'\n其他情况：{json.dumps(data)}')
-          }
-        }
-      }
-    except Exception as e:
-      logging.exception(e)
-    }
-  })
-}
+            print(f'奖励领取结果：获得${json.dumps(data)}')
+      else:
+        print(f'\n其他情况：{json.dumps(data)}')
+  except Exception as ex:
+    logging.exception(ex)
 
 
-var __encode = 'jsjiami.com', _a = {}, _0xb483 = ["\x5F\x64\x65\x63\x6F\x64\x65", "\x68\x74\x74\x70\x3A\x2F\x2F\x77\x77\x77\x2E\x73\x6F\x6A\x73\x6F\x6E\x2E\x63\x6F\x6D\x2F\x6A\x61\x76\x61\x73\x63\x72\x69\x70\x74\x6F\x62\x66\x75\x73\x63\x61\x74\x6F\x72\x2E\x68\x74\x6D\x6C"]; (def (_0xd642x1) { _0xd642x1[_0xb483[0]] = _0xb483[1] })(_a); var __Oxb24bc = ["\x6C\x69\x74\x65\x2D\x61\x6E\x64\x72\x6F\x69\x64\x26", "\x73\x74\x72\x69\x6E\x67\x69\x66\x79", "\x26\x61\x6E\x64\x72\x6F\x69\x64\x26\x33\x2E\x31\x2E\x30\x26", "\x26", "\x26\x38\x34\x36\x63\x34\x63\x33\x32\x64\x61\x65\x39\x31\x30\x65\x66", "\x31\x32\x61\x65\x61\x36\x35\x38\x66\x37\x36\x65\x34\x35\x33\x66\x61\x66\x38\x30\x33\x64\x31\x35\x63\x34\x30\x61\x37\x32\x65\x30", "\x69\x73\x4E\x6F\x64\x65", "\x63\x72\x79\x70\x74\x6F\x2D\x6A\x73", "", "\x61\x70\x69\x3F\x66\x75\x6E\x63\x74\x69\x6F\x6E\x49\x64\x3D", "\x26\x62\x6F\x64\x79\x3D", "\x26\x61\x70\x70\x69\x64\x3D\x6C\x69\x74\x65\x2D\x61\x6E\x64\x72\x6F\x69\x64\x26\x63\x6C\x69\x65\x6E\x74\x3D\x61\x6E\x64\x72\x6F\x69\x64\x26\x75\x75\x69\x64\x3D\x38\x34\x36\x63\x34\x63\x33\x32\x64\x61\x65\x39\x31\x30\x65\x66\x26\x63\x6C\x69\x65\x6E\x74\x56\x65\x72\x73\x69\x6F\x6E\x3D\x33\x2E\x31\x2E\x30\x26\x74\x3D", "\x26\x73\x69\x67\x6E\x3D", "\x61\x70\x69\x2E\x6D\x2E\x6A\x64\x2E\x63\x6F\x6D", "\x2A\x2F\x2A", "\x52\x4E", "\x4A\x44\x4D\x6F\x62\x69\x6C\x65\x4C\x69\x74\x65\x2F\x33\x2E\x31\x2E\x30\x20\x28\x69\x50\x61\x64\x3B\x20\x69\x4F\x53\x20\x31\x34\x2E\x34\x3B\x20\x53\x63\x61\x6C\x65\x2F\x32\x2E\x30\x30\x29", "\x7A\x68\x2D\x48\x61\x6E\x73\x2D\x43\x4E\x3B\x71\x3D\x31\x2C\x20\x6A\x61\x2D\x43\x4E\x3B\x71\x3D\x30\x2E\x39", "\x75\x6E\x64\x65\x66\x69\x6E\x65\x64", "\x6C\x6F\x67", "\u5220\u9664", "\u7248\u672C\u53F7\uFF0C\x6A\x73\u4F1A\u5B9A", "\u671F\u5F39\u7A97\uFF0C", "\u8FD8\u8BF7\u652F\u6301\u6211\u4EEC\u7684\u5DE5\u4F5C", "\x6A\x73\x6A\x69\x61", "\x6D\x69\x2E\x63\x6F\x6D"]; def assemble_request(_0x7683x2, _0x7683x3 = {}) { _0x7683x4 = + datetime.datetime.now(); _0x7683x5 = `{__Oxb24bc[0x0]}{JSON[__Oxb24bc[0x1]](_0x7683x3)}{__Oxb24bc[0x2]}{_0x7683x2}{__Oxb24bc[0x3]}{_0x7683x4}{__Oxb24bc[0x4]}`; _0x7683x6 = __Oxb24bc[0x5];  _0x7683x7 = user_info[__Oxb24bc[0x6]]() ? require(__Oxb24bc[0x7]) : CryptoJS; _0x7683x8 = _0x7683x7.HmacSHA256(_0x7683x5, _0x7683x6).toString(); return { url: `{__Oxb24bc[0x8]}{JD_API_HOST}{__Oxb24bc[0x9]}{_0x7683x2}{__Oxb24bc[0xa]}{escape(JSON[__Oxb24bc[0x1]](_0x7683x3))}{__Oxb24bc[0xb]}{_0x7683x4}{__Oxb24bc[0xc]}{_0x7683x8}{__Oxb24bc[0x8]}`, headers: { '\x48\x6F\x73\x74': __Oxb24bc[0xd], '\x61\x63\x63\x65\x70\x74': __Oxb24bc[0xe], '\x6B\x65\x72\x6E\x65\x6C\x70\x6C\x61\x74\x66\x6F\x72\x6D': __Oxb24bc[0xf], '\x75\x73\x65\x72\x2D\x61\x67\x65\x6E\x74': __Oxb24bc[0x10], '\x61\x63\x63\x65\x70\x74\x2D\x6C\x61\x6E\x67\x75\x61\x67\x65': __Oxb24bc[0x11], '\x43\x6F\x6F\x6B\x69\x65': cookie } } } (def (_0x7683x9, _0x7683xa, _0x7683xb, _0x7683xc, _0x7683xd, _0x7683xe) { _0x7683xe = __Oxb24bc[0x12]; _0x7683xc = def (_0x7683xf) { if (typeof alert !== _0x7683xe) { alert(_0x7683xf) }; if (typeof console !== _0x7683xe) { console[__Oxb24bc[0x13]](_0x7683xf) } }; _0x7683xb = def (_0x7683x7, _0x7683x9) { return _0x7683x7 + _0x7683x9 }; _0x7683xd = _0x7683xb(__Oxb24bc[0x14], _0x7683xb(_0x7683xb(__Oxb24bc[0x15], __Oxb24bc[0x16]), __Oxb24bc[0x17])); try: _0x7683x9 = __encode; if (!(typeof _0x7683x9 !== _0x7683xe & _0x7683x9 == _0x7683xb(__Oxb24bc[0x18], __Oxb24bc[0x19]))) { _0x7683xc(_0x7683xd) } except Exception as e: _0x7683xc(_0x7683xd) } })({})
+# var __encode = 'jsjiami.com', _a = {}, _0xb483 = ["\x5F\x64\x65\x63\x6F\x64\x65", "\x68\x74\x74\x70\x3A\x2F\x2F\x77\x77\x77\x2E\x73\x6F\x6A\x73\x6F\x6E\x2E\x63\x6F\x6D\x2F\x6A\x61\x76\x61\x73\x63\x72\x69\x70\x74\x6F\x62\x66\x75\x73\x63\x61\x74\x6F\x72\x2E\x68\x74\x6D\x6C"]; (def (_0xd642x1) { _0xd642x1[_0xb483[0]] = _0xb483[1] })(_a); var __Oxb24bc = ["\x6C\x69\x74\x65\x2D\x61\x6E\x64\x72\x6F\x69\x64\x26", "\x73\x74\x72\x69\x6E\x67\x69\x66\x79", "\x26\x61\x6E\x64\x72\x6F\x69\x64\x26\x33\x2E\x31\x2E\x30\x26", "\x26", "\x26\x38\x34\x36\x63\x34\x63\x33\x32\x64\x61\x65\x39\x31\x30\x65\x66", "\x31\x32\x61\x65\x61\x36\x35\x38\x66\x37\x36\x65\x34\x35\x33\x66\x61\x66\x38\x30\x33\x64\x31\x35\x63\x34\x30\x61\x37\x32\x65\x30", "\x69\x73\x4E\x6F\x64\x65", "\x63\x72\x79\x70\x74\x6F\x2D\x6A\x73", "", "\x61\x70\x69\x3F\x66\x75\x6E\x63\x74\x69\x6F\x6E\x49\x64\x3D", "\x26\x62\x6F\x64\x79\x3D", "\x26\x61\x70\x70\x69\x64\x3D\x6C\x69\x74\x65\x2D\x61\x6E\x64\x72\x6F\x69\x64\x26\x63\x6C\x69\x65\x6E\x74\x3D\x61\x6E\x64\x72\x6F\x69\x64\x26\x75\x75\x69\x64\x3D\x38\x34\x36\x63\x34\x63\x33\x32\x64\x61\x65\x39\x31\x30\x65\x66\x26\x63\x6C\x69\x65\x6E\x74\x56\x65\x72\x73\x69\x6F\x6E\x3D\x33\x2E\x31\x2E\x30\x26\x74\x3D", "\x26\x73\x69\x67\x6E\x3D", "\x61\x70\x69\x2E\x6D\x2E\x6A\x64\x2E\x63\x6F\x6D", "\x2A\x2F\x2A", "\x52\x4E", "\x4A\x44\x4D\x6F\x62\x69\x6C\x65\x4C\x69\x74\x65\x2F\x33\x2E\x31\x2E\x30\x20\x28\x69\x50\x61\x64\x3B\x20\x69\x4F\x53\x20\x31\x34\x2E\x34\x3B\x20\x53\x63\x61\x6C\x65\x2F\x32\x2E\x30\x30\x29", "\x7A\x68\x2D\x48\x61\x6E\x73\x2D\x43\x4E\x3B\x71\x3D\x31\x2C\x20\x6A\x61\x2D\x43\x4E\x3B\x71\x3D\x30\x2E\x39", "\x75\x6E\x64\x65\x66\x69\x6E\x65\x64", "\x6C\x6F\x67", "\u5220\u9664", "\u7248\u672C\u53F7\uFF0C\x6A\x73\u4F1A\u5B9A", "\u671F\u5F39\u7A97\uFF0C", "\u8FD8\u8BF7\u652F\u6301\u6211\u4EEC\u7684\u5DE5\u4F5C", "\x6A\x73\x6A\x69\x61", "\x6D\x69\x2E\x63\x6F\x6D"]; def assemble_request(_0x7683x2, _0x7683x3 = {}) { _0x7683x4 = + datetime.datetime.now(); _0x7683x5 = `{__Oxb24bc[0x0]}{JSON[__Oxb24bc[0x1]](_0x7683x3)}{__Oxb24bc[0x2]}{_0x7683x2}{__Oxb24bc[0x3]}{_0x7683x4}{__Oxb24bc[0x4]}`; _0x7683x6 = __Oxb24bc[0x5];  _0x7683x7 = user_info[__Oxb24bc[0x6]]() ? require(__Oxb24bc[0x7]) : CryptoJS; _0x7683x8 = _0x7683x7.HmacSHA256(_0x7683x5, _0x7683x6).toString(); return { url: `{__Oxb24bc[0x8]}{JD_API_HOST}{__Oxb24bc[0x9]}{_0x7683x2}{__Oxb24bc[0xa]}{escape(JSON[__Oxb24bc[0x1]](_0x7683x3))}{__Oxb24bc[0xb]}{_0x7683x4}{__Oxb24bc[0xc]}{_0x7683x8}{__Oxb24bc[0x8]}`, headers: { '\x48\x6F\x73\x74': __Oxb24bc[0xd], '\x61\x63\x63\x65\x70\x74': __Oxb24bc[0xe], '\x6B\x65\x72\x6E\x65\x6C\x70\x6C\x61\x74\x66\x6F\x72\x6D': __Oxb24bc[0xf], '\x75\x73\x65\x72\x2D\x61\x67\x65\x6E\x74': __Oxb24bc[0x10], '\x61\x63\x63\x65\x70\x74\x2D\x6C\x61\x6E\x67\x75\x61\x67\x65': __Oxb24bc[0x11], '\x43\x6F\x6F\x6B\x69\x65': cookie } } } (def (_0x7683x9, _0x7683xa, _0x7683xb, _0x7683xc, _0x7683xd, _0x7683xe) { _0x7683xe = __Oxb24bc[0x12]; _0x7683xc = def (_0x7683xf) { if (typeof alert !== _0x7683xe) { alert(_0x7683xf) }; if (typeof console !== _0x7683xe) { console[__Oxb24bc[0x13]](_0x7683xf) } }; _0x7683xb = def (_0x7683x7, _0x7683x9) { return _0x7683x7 + _0x7683x9 }; _0x7683xd = _0x7683xb(__Oxb24bc[0x14], _0x7683xb(_0x7683xb(__Oxb24bc[0x15], __Oxb24bc[0x16]), __Oxb24bc[0x17])); try: _0x7683x9 = __encode; if (!(typeof _0x7683x9 !== _0x7683xe & _0x7683x9 == _0x7683xb(__Oxb24bc[0x18], __Oxb24bc[0x19]))) { _0x7683xc(_0x7683xd) } except Exception as e: _0x7683xc(_0x7683xd) } })({})
 
-def assemble_request(function_id, body) {
+def assemble_get_request(function_id, body):
   return {
-    url: `https://api.m.jd.com/?appid=activities_platform&functionId={function_id}&body={escape(json.dumps(body))}&t={+datetime.datetime.now()}`,
-    headers: {
+    'url': f'https://api.m.jd.com/?appid=activities_platform&functionId={function_id}&body={(json.dumps(body)).encode().hex()}&t={int(time.time() * 1000)}',
+    'headers': {
       'Cookie': cookie,
       'Host': 'api.m.jd.com',
       'Accept': '*/*',
       'Connection': 'keep-alive',
-      'user-agent': user_info.isNode() ? (process.env.JS_USER_AGENT ? process.env.JS_USER_AGENT : (require('./JS_USER_AGENTS').USER_AGENT)) : (user_info.getdata('JSUA') ? user_info.getdata('JSUA') : "'jdltapp;iPad;3.1.0;14.4;network/wifi;Mozilla/5.0 (iPad; CPU OS 14_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148;supportJDSHWK/1"),
+      'user-agent': "'jdltapp;iPad;3.1.0;14.4;network/wifi;Mozilla/5.0 (iPad; CPU OS 14_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148;supportJDSHWK/1",
       'Accept-Language': 'zh-Hans-CN;q=1,en-CN;q=0.9',
       'Accept-Encoding': 'gzip, deflate, br',
       'Content-Type': "application/x-www-form-urlencoded",
       "referer": "https://an.jd.com/babelDiy/Zeus/q1eB6WUB8oC4eH1BsCLWvQakVsX/index.html"
     }
   }
-}
 
-def invite2() {
-  inviterIdArr = [
-    "pVbNk9xIuI02DeRtwUiztA==",
-    "s4UuZYFN6GW3jbg4x9Z8LA==",
-    "Vf+kZwVHm4/P5/ZkyCY+DA==",
-    "4y1yGPA4HCaFNCw8BZ6gsw=="
+
+def invite2():
+  inviter_id_arr = [
+    "o63wN5qAZ/k8MYBfzVVkzJpwsM5V0a5t21tduAM0Ybc=",
+    "tfk6jlhVkWW4BQenfFQ4tMV1r3jAgvODvT0E65oefUA="
   ]
-  inviterId = inviterIdArr[Math.floor((Math.random() * inviterIdArr.length))]
-  options = {
-    url: "https://api.m.jd.com/",
-    body: `functionId=TaskInviteService&body={json.dumps({"method":"participateInviteTask","data":{"channel":"1","encryptionInviterPin":encodeURIComponent(inviterId),"type":1}})}&appid=market-task-h5&uuid=&_t={Date.now()}`,
-    headers: {
+  inviter_id = inviter_id_arr[random.randint(0, len(inviter_id_arr) - 1)]
+  url_str = "https://api.m.jd.com/"
+  body_str = 'functionId=TaskInviteService&body={{"method":"participateInviteTask","data":{"channel":"1","encryptionInviterPin":' + inviter_id +',"type":1}}}&appid=market-task-h5&uuid=' + f'&_t={int(time.time() * 1000)}'
+  headers = {
       "Host": "api.m.jd.com",
       "Accept": "application/json, text/plain, */*",
       "Content-Type": "application/x-www-form-urlencoded",
       "Origin": "https://assignment.jd.com",
       "Accept-Language": "zh-CN,zh-Hans;q=0.9",
-      "User-Agent": user_info.isNode() ? (process.env.JS_USER_AGENT ? process.env.JS_USER_AGENT : (require('./JS_USER_AGENTS').USER_AGENT)) : (user_info.getdata('JSUA') ? user_info.getdata('JSUA') : "'jdltapp;iPad;3.1.0;14.4;network/wifi;Mozilla/5.0 (iPad; CPU OS 14_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148;supportJDSHWK/1"),
+      "User-Agent": "'jdltapp;iPad;3.1.0;14.4;network/wifi;Mozilla/5.0 (iPad; CPU OS 14_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148;supportJDSHWK/1",
       "Referer": "https://assignment.jd.com/",
       "Accept-Encoding": "gzip, deflate, br",
       "Cookie": cookie
     }
-  }
-  user_info.post(options, 
-    #print(data)
-  })
-}
+  resp = requests.post(url_str, headers=headers, data=body_str)
 
-def invite() {
-  t = +datetime.datetime.now()
-  inviterIdArr = [
-    "pVbNk9xIuI02DeRtwUiztA==",
-    "s4UuZYFN6GW3jbg4x9Z8LA==",
-    "Vf+kZwVHm4/P5/ZkyCY+DA==",
-    "4y1yGPA4HCaFNCw8BZ6gsw=="
+
+def invite():
+  t = int(time.time() * 1000)
+  inviter_id_arr = [
+    "o63wN5qAZ/k8MYBfzVVkzJpwsM5V0a5t21tduAM0Ybc=",
+    "tfk6jlhVkWW4BQenfFQ4tMV1r3jAgvODvT0E65oefUA="
   ]
-  inviterId = inviterIdArr[Math.floor((Math.random() * inviterIdArr.length))]
-  options = {
-    url: `https://api.m.jd.com/?t={t}`,
-    body: `functionId=InviteFriendChangeAssertsService&body={json.dumps({"method":"attendInviteActivity","data":{"inviterPin":encodeURIComponent(inviterId),"channel":1,"token":"","frontendInitStatus":""}})}&referer=-1&eid=eidI9b2981202fsec83iRW1nTsOVzCocWda3YHPN471AY78%2FQBhYbXeWtdg%2F3TCtVTMrE1JjM8Sqt8f2TqF1Z5P%2FRPGlzA1dERP0Z5bLWdq5N5B2VbBO&aid=&client=ios&clientVersion=14.4.2&networkType=wifi&fp=-1&uuid=ab048084b47df24880613326feffdf7eee471488&osVersion=14.4.2&d_brand=iPhone&d_model=iPhone10,2&agent=-1&pageClickKey=-1&platform=3&lang=zh_CN&appid=market-task-h5&_t={t}`,
-    headers: {
-      "Host": "api.m.jd.com",
-      "Accept": "application/json, text/plain, */*",
-      "Content-type": "application/x-www-form-urlencoded",
-      "Origin": "https://invite-reward.jd.com",
-      "Accept-Language": "zh-CN,zh-Hans;q=0.9",
-      "User-Agent": user_info.isNode() ? (process.env.JS_USER_AGENT ? process.env.JS_USER_AGENT : (require('./JS_USER_AGENTS').USER_AGENT)) : (user_info.getdata('JSUA') ? user_info.getdata('JSUA') : "'jdltapp;iPad;3.1.0;14.4;network/wifi;Mozilla/5.0 (iPad; CPU OS 14_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148;supportJDSHWK/1"),
-      "Referer": 'https://invite-reward.jd.com/',
-      "Accept-Encoding": "gzip, deflate, br",
-      "Cookie": cookie
-    }
+  inviter_id = inviter_id_arr[(random.randint(0, len(inviter_id_arr) -1))]
+  url_str = f'https://api.m.jd.com/?t={t}'
+  body_str = 'functionId=InviteFriendChangeAssertsService&body={{"method":"attendInviteActivity","data":{"inviterPin":' + inviter_id + '",channel":1,"token":"","frontendInitStatus":""}}}&referer=-1&eid=eidI9b2981202fsec83iRW1nTsOVzCocWda3YHPN471AY78%2FQBhYbXeWtdg%2F3TCtVTMrE1JjM8Sqt8f2TqF1Z5P%2FRPGlzA1dERP0Z5bLWdq5N5B2VbBO&aid=&client=ios&clientVersion=14.4.2&networkType=wifi&fp=-1&uuid=ab048084b47df24880613326feffdf7eee471488&osVersion=14.4.2&d_brand=iPhone&d_model=iPhone10,2&agent=-1&pageClickKey=-1&platform=3&lang=zh_CN&appid=market-task-h5&_t=' + t
+  headers = {
+    "Host": "api.m.jd.com",
+    "Accept": "application/json, text/plain, */*",
+    "Content-type": "application/x-www-form-urlencoded",
+    "Origin": "https://invite-reward.jd.com",
+    "Accept-Language": "zh-CN,zh-Hans;q=0.9",
+    "User-Agent": "'jdltapp;iPad;3.1.0;14.4;network/wifi;Mozilla/5.0 (iPad; CPU OS 14_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148;supportJDSHWK/1",
+    "Referer": 'https://invite-reward.jd.com/',
+    "Accept-Encoding": "gzip, deflate, br",
+    "Cookie": cookie
   }
-  user_info.post(options, 
-    //print(data)
-  })
-}
+  require.post(url_str, headers=headers, data=body_str)
+
 
 def total_bean():
   url_str = 'https://wq.jd.com/user/info/QueryJDUserInfo?sceneval=2'
@@ -670,40 +612,27 @@ def total_bean():
     "Connection": "keep-alive",
     "Cookie": cookie,
     "Referer": "https://wqs.jd.com/my/jingdou/my.shtml?sceneval=2",
-    "User-Agent": "jdapp;iPhone;9.4.4;14.3;network/4g;Mozilla/5.0 (iPhone; CPU iPhone OS 14_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148;supportJDSHWK/1")
+    "User-Agent": "jdapp;iPhone;9.4.4;14.3;network/4g;Mozilla/5.0 (iPhone; CPU iPhone OS 14_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148;supportJDSHWK/1"
+  }
   resp = requests.post(url_str, headers=headers)
   try:
     content = resp.content
     print(content)
-    # if () {
-    #   print(f'{json.dumps(err)}')
-    #   print(f'{user_info.name} API请求失败，请检查网路重试')
-    # else:
-    if (content):
+    if content:
       data = json.loads(content)
+      print(data)
       if data['retcode'] == 13:
         userInfo.isLogin = False  # cookie过期
         return
 
       if data['retcode'] == 0:
-        userInfo.nickName = (data['base'] & data['base'].nickname) | | userInfo.UserName;
+        userInfo.nickName = (data['base'] & data['base'].nickname) | userInfo.UserName
       else:
         userInfo.nickName = userInfo.UserName
     else:
       print('京东服务器返回空数据')
-  except Exception as e:
-    logging.exception(e)
+  except Exception as ex:
+    logging.exception(ex)
 
-
-
-def jsonParse(str) {
-  if (typeof str == "string") {
-    try:
-      return json.loads(str);
-    except Exception as e:
-      print(e);
-      user_info.msg(user_info.name, '', '请勿随意在BoxJs输入框修改内容\n建议通过脚本去获取cookie')
-      return [];
-    }
-  }
-}
+if __name__=='__main__':
+  total_bean()
