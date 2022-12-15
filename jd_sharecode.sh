@@ -2,7 +2,7 @@
 #15 3,23 * * * jd_sharecode.sh 
 #new Env('获取互助码');
 ## Build 20220325-001-test
-grep '6dylan6_1116' /ql/data/config/task_before.sh >/dev/null 2>&1 || grep '6dylan6_1116' /ql/config/task_before.sh > /dev/null 2>&1
+grep '6dylan6_1207' /ql/data/config/task_before.sh >/dev/null 2>&1 || grep '6dylan6_1207' /ql/config/task_before.sh > /dev/null 2>&1
 if [[ $? != 0 ]];then
  cp /ql/repo/6dylan6_jdpro/docker/task_before.sh /ql/config/ >/dev/null 2>&1 || cp /ql/data/repo/6dylan6_jdpro/docker/task_before.sh /ql/data/config/
 fi
@@ -225,12 +225,17 @@ def_sub(){
 gen_pt_pin_array() {
   local envs=$(eval echo "\$JD_COOKIE")
   local array=($(echo $envs | sed 's/&/ /g'))
-  local tmp1 tmp2 i pt_pin_temp
+  local tmp1 tmp2 i pt_pin_temp pin_arr_tmp j keywords
+  keywords="pt_pin="
+  j=0
   for i in "${!array[@]}"; do
-    pt_pin_temp=$(echo ${array[i]} | perl -pe "{s|.*pt_pin=([^; ]+)(?=;?).*|\1|; s|%|\\\x|g}")
-    [[ $pt_pin_temp == *\\x* ]] && pt_pin[i]=$(printf $pt_pin_temp) || pt_pin[i]=$pt_pin_temp
+    if [[ "${array[i]}" =~ $keywords ]]; then
+        pt_pin_temp=$(echo ${array[i]} | perl -pe "{s|.*pt_pin=([^; ]+)(?=;?).*|\1|; s|%|\\\x|g}")
+        [[ $pt_pin_temp == *\\x* ]] && pt_pin[j]=$(printf $pt_pin_temp) || pt_pin[j]=$pt_pin_temp
+        j=$((j + 1))
+    fi
   done
-  }
+}
 
 ## 导出互助码的通用程序，$1：去掉后缀的脚本名称，$2：config.sh中的后缀，$3：活动中文名称
 export_codes_sub() {
@@ -252,7 +257,7 @@ export_codes_sub() {
         i=0
         pt_pin_in_log=()
         code=()
-        pt_pin_and_code=$(ls -t ./*$task_name*/*.log|head -7| xargs awk -v var="的$chinese_name好友互助码" 'BEGIN{FS="[（ ）】]+"; OFS="&"} $3~var {print $2,$4}')
+        pt_pin_and_code=$(ls -t ./*$task_name*/*.log|head -6| xargs awk -v var="的$chinese_name好友互助码" 'BEGIN{FS="[（ ）】]+"; OFS="&"} $3~var {print $2,$4}')
         for line in $pt_pin_and_code; do
             pt_pin_in_log[i]=$(echo $line | awk -F "&" '{print $1}')
             code[i]=$(echo $line | awk -F "&" '{print $2}')
@@ -504,7 +509,12 @@ local config_name_for_other=ForOther$config_name
 local ShareCode_dir="$dir_log/.ShareCode"
 local ShareCode_log="$ShareCode_dir/$config_name.log"
 local i j k
-
+local anum=`tail -1 $ShareCode_log |awk -F= '{print $1}'|tr -d 'a-zA-z'`
+local bnum=`cat $latest_log_path|grep "^$config_name_my"|wc -l`
+local cnum=$anum
+if [[ $anum -lt $bnum ]];then
+    cnum=$bnum
+fi
 #更新配置文件中的互助码
 [[ ! -d $ShareCode_dir ]] && mkdir -p $ShareCode_dir
 [[ "$1" = "TokenJxnc" ]] && config_name_my=$1    
@@ -512,7 +522,7 @@ if [ ! -f $ShareCode_log ] || [ -z "$(cat $ShareCode_log | grep "^$config_name_m
    echo -e "\n## $chinese_name\n${config_name_my}1=''\n" >> $ShareCode_log
 fi
 echo -e "\n#【`date +%X`】 正在更新 $chinese_name 的互助码..."
-for ((i=1; i<=$user_sum; i++)); do
+for ((i=1; i<=$cnum; i++)); do
     local new_code="$(cat $latest_log_path | grep "^$config_name_my$i=.\+'$" | sed "s/\S\+'\([^']*\)'$/\1/")"
     local old_code="$(cat $ShareCode_log | grep "^$config_name_my$i=.\+'$" | sed "s/\S\+'\([^']*\)'$/\1/")"
     if [[ $i -le $user_sum ]]; then
@@ -545,13 +555,18 @@ local config_name_for_other=ForOther$config_name
 local ShareCode_dir="$dir_log/.ShareCode"
 local ShareCode_log="$ShareCode_dir/$config_name.log"
 local i j k
-
+local anum=`tail -1 $ShareCode_log |awk -F= '{print $1}'|tr -d 'a-zA-z'`
+local bnum=`cat $latest_log_path|grep "^$config_name_my"|wc -l`
+local cnum=$anum
+if [[ $anum -lt $bnum ]];then
+    cnum=$bnum
+fi
 #更新配置文件中的互助规则
 echo -e "\n#【`date +%X`】 正在更新 $chinese_name 的互助规则..."
 if [ -z "$(cat $ShareCode_log | grep "^$config_name_for_other\d")" ]; then
    echo -e "${config_name_for_other}1=\"\"" >> $ShareCode_log
 fi
-for ((j=1; j<=$user_sum; j++)); do
+for ((j=1; j<=$cnum; j++)); do
     local new_rule="$(cat $latest_log_path | grep "^$config_name_for_other$j=.\+\"$" | sed "s/\S\+\"\([^\"]*\)\"$/\1/")"
     local old_rule="$(cat $ShareCode_log | grep "^$config_name_for_other$j=.\+\"$" | sed "s/\S\+\"\([^\"]*\)\"$/\1/")"
     if [[ $j -le $user_sum ]]; then

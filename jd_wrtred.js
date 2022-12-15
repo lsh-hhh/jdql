@@ -1,27 +1,14 @@
 /*
-脚本：取关主播
-更新时间：2021-07-27
-默认：每运行一次脚本取关所有主播
-脚本兼容: Quantumult X, Surge, Loon, JSBox, Node.js, 小火箭
-==============Quantumult X===========
-[task_local]
-#取关所有主播
-55 6 * * * jd_unsubscriLive.js, tag=取关所有主播, img-url=https://raw.githubusercontent.com/Orz-3/mini/master/Color/jd.png, enabled=true
-===========Loon============
-[Script]
-cron "55 6 * * *" script-path=jd_unsubscriLive.js,tag=取关所有主播
-============Surge=============
-取关所有主播 = type=cron,cronexp="55 6 * * *",wake-system=1,timeout=3600,script-path=jd_unsubscriLive.js
-===========小火箭========
-取关所有主播 = type=cron,script-path=jd_unsubscriLive.js, cronexpr="55 6 * * *", timeout=3600, enable=true
+22 2 * * * https://raw.githubusercontent.com/6dylan6/jdpro/main/jd_wrtred.js 
+updatetime:2022/11/23
  */
-const $ = new Env('取关所有主播');
-//Node.js用户请在jdCookie.js处填写京东ck;
-const jdCookieNode = $.isNode() ? require('./jdCookie.js') : '';
-const notify = $.isNode() ? require('./sendNotify') : '';
 
+const $ = new Env('万人团红包');
+const notify = $.isNode() ? require('./sendNotify') : '';
+const jdCookieNode = $.isNode() ? require('./jdCookie.js') : '';
+let jdNotify = true;
 //IOS等用户直接用NobyDa的jd cookie
-let cookiesArr = [], cookie = '', allMessage = '';
+let cookiesArr = [], cookie = '', message = '';
 if ($.isNode()) {
     Object.keys(jdCookieNode).forEach((item) => {
         cookiesArr.push(jdCookieNode[item])
@@ -31,9 +18,9 @@ if ($.isNode()) {
     cookiesArr = [$.getdata('CookieJD'), $.getdata('CookieJD2'), ...jsonParse($.getdata('CookiesJD') || "[]").map(item => item.cookie)].filter(item => !!item);
 }
 !(async () => {
-    let aid = ''
     if (!cookiesArr[0]) {
-        $.msg('【京东账号一】取关所有主播失败', '【提示】请先获取京东账号一cookie\n直接使用NobyDa的京东签到获取', 'https://bean.m.jd.com/bean/signIndex.action', { "open-url": "https://bean.m.jd.com/bean/signIndex.action" });
+        $.msg($.name, '【提示】请先获取京东账号一cookie\n直接使用NobyDa的京东签到获取', 'https://bean.m.jd.com/bean/signIndex.action', { "open-url": "https://bean.m.jd.com/bean/signIndex.action" });
+        return;
     }
     for (let i = 0; i < cookiesArr.length; i++) {
         if (cookiesArr[i]) {
@@ -42,8 +29,9 @@ if ($.isNode()) {
             $.index = i + 1;
             $.isLogin = true;
             $.nickName = '';
+            $.UA=require('./USER_AGENTS').UARAM();
             await TotalBean();
-            console.log(`\n****开始【京东账号${$.index}】${$.nickName || $.UserName}*****\n`);
+            console.log(`\n******开始【京东账号${$.index}】${$.nickName || $.UserName}*********\n`);
             if (!$.isLogin) {
                 $.msg($.name, `【提示】cookie已失效`, `京东账号${$.index} ${$.nickName || $.UserName}\n请重新登录获取\nhttps://bean.m.jd.com/bean/signIndex.action`, { "open-url": "https://bean.m.jd.com/bean/signIndex.action" });
                 if ($.isNode()) {
@@ -51,47 +39,10 @@ if ($.isNode()) {
                 }
                 continue
             }
-            allMessage += `京东账号${$.index} - ${$.nickName}\n`;
-            $.succs = 0;
-            $.fails = 0;
-            $.commlist = [];
-            $.olds = '';
-            for (let i = 0; i < 100; i++) {
-                $.commlist.length = 0;
-                await GetRawFollowAuthor()
-                if ($.commlist.length == 0) { break }
-                for (let m = 0; m < $.commlist.length; m++) {
-                    $.result = false;
-                    $.authorId = $.commlist[m]['authorId']
-                    $.userName = $.commlist[m]['userName']
-                    await unsubscribeCartsFun()
-                    if ($.result) {
-                        aid = '&' + $.authorId + '&'
-                        if ($.olds.indexOf(aid) == -1) {
-                            $.succs += 1;
-                            $.olds += aid;
-                        }
-                        $.fails = 0;
-                    } else {
-                        $.fails += 1;
-                        if ($.fails > 4) { break }
-                    }
-                    await sleep(randomNum(800, 2200))
-                }
-                console.log('取关一轮完成，等待3-6秒')
-                await sleep(randomNum(3000, 6000))
-            }
-            allMessage += `成功取关主播数：${$.succs}\n`;
-            if ($.fails > 4) {
-                allMessage += `❗️❗️取关主播连续五次失败❗️❗️\n`;
-            }
-            allMessage += '\n'
+            await WRT();
+            await $.wait(2000)
         }
     }
-    //if (allMessage) {
-        //allMessage = allMessage.substring(0, allMessage.length - 1)
-        //if ($.isNode() && (process.env.CASH_NOTIFY_CONTROL ? process.env.CASH_NOTIFY_CONTROL === 'false' : !!1)) await notify.sendNotify($.name, allMessage);
-    //}
 })()
     .catch((e) => {
         $.log('', `❌ ${$.name}, 失败! 原因: ${e}!`, '')
@@ -99,143 +50,100 @@ if ($.isNode()) {
     .finally(() => {
         $.done();
     })
-function sleep(timeout) {
-    return new Promise((resolve) => setTimeout(resolve, timeout));
-}
-function randomNum(minNum, maxNum) {
-    switch (arguments.length) {
-        case 1:
-            return parseInt(Math.random() * minNum + 1, 10);
-            break;
-        case 2:
-            return parseInt(Math.random() * (maxNum - minNum + 1) + minNum, 10);
-            break;
-        default:
-            return 0;
-            break;
-    }
-}
-function unsubscribeCartsFun(author) {
-    return new Promise(resolve => {
-        const options = {
-            "url": `https://m.jingxi.com/jxlive_user/UnFollow?authorId=${$.authorId}&platform=3&_=` + new Date().getTime().toString() + `&sceneval=2&g_login_type=1&callback=jsonpCBKE&g_ty=ls`,
-            "headers": {
-                "Host": "m.jingxi.com",
-                "Accept": "*/*",
-                "Connection": "keep-alive",
-                "Cookie": cookie,
-                "User-Agent": $.isNode() ? (process.env.JD_USER_AGENT ? process.env.JD_USER_AGENT : (require('./USER_AGENTS').USER_AGENT)) : ($.getdata('JDUA') ? $.getdata('JDUA') : "jdapp;iPhone;9.4.4;14.3;network/4g;Mozilla/5.0 (iPhone; CPU iPhone OS 14_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148;supportJDSHWK/1"),
-                "Accept-Language": "zh-cn",
-                "Accept-Encoding": "gzip, deflate, br",
-                "Referer": "https://st.jingxi.com/"
-            }
-        }
-        $.get(options, (err, resp, data) => {
-            if (data.indexOf('iRet":0') > 0) {
-                $.result = true;
-                console.log(`取关主播【${$.userName}】成功\n`)
-            } else {
-                console.log(`取关主播【${$.userName}】失败：` + data + `\n`)
-            }
-            resolve(data);
-        });
-    })
-}
 
-function getStr(text, start, end) {
 
-    var str = text;
-    var aPos = str.indexOf(start);
-    if (aPos < 0) { return null }
-    var bPos = str.indexOf(end, aPos + start.length);
-    if (bPos < 0) { return null }
-    var retstr = str.substr(aPos + start.length, text.length - (aPos + start.length) - (text.length - bPos));
-    return retstr;
 
-}
-function GetRawFollowAuthor() {
-    return new Promise((resolve) => {
-        const options = {
-            "url": `https://m.jingxi.com/jxlive_user/GetRawFollowAuthor?pagesize=10&pageno=1&_=` + (new Date().getTime() - 2000).toString() + `&sceneval=2&g_login_type=1&callback=jsonpCBKB&g_ty=ls`,
-            "headers": {
-                "Host": "m.jingxi.com",
-                "Accept": "*/*",
-                "Connection": "keep-alive",
-                "Cookie": cookie,
-                "User-Agent": $.isNode() ? (process.env.JD_USER_AGENT ? process.env.JD_USER_AGENT : (require('./USER_AGENTS').USER_AGENT)) : ($.getdata('JDUA') ? $.getdata('JDUA') : "jdapp;iPhone;9.4.4;14.3;network/4g;Mozilla/5.0 (iPhone; CPU iPhone OS 14_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148;supportJDSHWK/1"),
-                "Accept-Language": "zh-cn",
-                "Accept-Encoding": "gzip, deflate, br",
-                "Referer": "https://st.jingxi.com/"
-            },
-        }
-        //https://m.jingxi.com/jxlive_user/GetRawFollowAuthor?pagesize=10&pageno=1&_=1627380788998&sceneval=2&g_login_type=1&callback=jsonpCBKB&g_ty=ls
-        $.get(options, (err, resp, data) => {
-            let userInfo = {}, users = []
-            try {
-                data = JSON.parse(getStr(data, 'jsonpCBKB(', ');'));
-                if (data.iRet === 0) {
-                    for (let i = 0; i < data['data']['LiveIng'].length; i++) {
-                        users.push({ 'authorId': data['data']['LiveIng'][i]['authorId'], 'userName': data['data']['LiveIng'][i]['userName'] })
-                    }
-                    for (let i = 0; i < data['data']['PRLive'].length; i++) {
-                        users.push({ 'authorId': data['data']['PRLive'][i]['authorId'], 'userName': data['data']['PRLive'][i]['userName'] })
-                    }
-                    $.commlist = users
-                    
-                    console.log(`本轮取消主播数：${$.commlist.length}个\n`)
-                }
-            } catch (e) {
-                $.logErr(e, resp);
-            } finally {
-                resolve(data);
-            }
-        });
-    })
-}
-
-function TotalBean() {
-    return new Promise(async resolve => {
-        const options = {
-            "url": `https://wq.jd.com/user/info/QueryJDUserInfo?sceneval=2`,
-            "headers": {
-                "Accept": "application/json,text/plain, */*",
-                "Content-Type": "application/x-www-form-urlencoded",
-                "Accept-Encoding": "gzip, deflate, br",
-                "Accept-Language": "zh-cn",
-                "Connection": "keep-alive",
-                "Cookie": cookie,
-                "Referer": "https://wqs.jd.com/my/jingdou/my.shtml?sceneval=2",
-                "User-Agent": $.isNode() ? (process.env.JD_USER_AGENT ? process.env.JD_USER_AGENT : (require('./USER_AGENTS').USER_AGENT)) : ($.getdata('JDUA') ? $.getdata('JDUA') : "jdapp;iPhone;9.4.4;14.3;network/4g;Mozilla/5.0 (iPhone; CPU iPhone OS 14_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148;supportJDSHWK/1")
-            }
-        }
-        $.post(options, (err, resp, data) => {
+async function WRT() {
+    return new Promise(async (resolve) => {
+        $.post(getUrl(), async (err, resp, data) => {
             try {
                 if (err) {
                     console.log(`${JSON.stringify(err)}`)
-                    console.log(`${$.name} API请求失败，请检查网路重试`)
+                    console.log(` API请求失败，请检查网路重试`)
                 } else {
-                    if (data) {
-                        data = JSON.parse(data);
-                        if (data['retcode'] === 13) {
-                            $.isLogin = false; //cookie过期
-                            return
-                        }
-                        if (data['retcode'] === 0) {
-                            $.nickName = (data['base'] && data['base'].nickname) || $.UserName;
-                        } else {
-                            $.nickName = $.UserName
+                    data = JSON.parse(data)
+                    if (data.code == 0) {
+                        if (data.data.bizCode == 0) {
+                            console.log(` 恭喜获得 ${data.data?.result?.hongBaoResult.hongBao.disCount} 红包`);
+                        }else{
+                            console.log(data.data.bizMsg);
                         }
                     } else {
-                        console.log(`京东服务器返回空数据`)
+                        console.log(data.msg)
                     }
                 }
             } catch (e) {
                 $.logErr(e, resp)
             } finally {
-                resolve();
+                resolve(data)
             }
         })
     })
+}
+
+function getUrl() {
+    return {
+        url: `https://api.m.jd.com`,
+        body: `appid=wh5&clientVersion=1.0.0&functionId=wanrentuan_superise_send&body={"channel":2}&area=2_2813_61130_0`,
+        headers: {
+            'Host': 'api.m.jd.com',
+            'Origin': 'https://h5.m.jd.com',
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'User-Agent':$.UA,
+            'Cookie': cookie
+        }
+    }
+}
+
+function TotalBean() {
+    return new Promise((resolve) => {
+        const options = {
+            url: 'https://plogin.m.jd.com/cgi-bin/ml/islogin',
+            headers: {
+                "Cookie": cookie,
+                "referer": "https://h5.m.jd.com/",
+                "User-Agent": $.UA,
+            },
+            timeout: 10000
+        }
+        $.get(options, (err, resp, data) => {
+            try {
+                if (data) {
+                    data = JSON.parse(data);
+                    if (data.islogin === "1") {
+                    } else if (data.islogin === "0") {
+                        $.isLogin = false;
+                    }
+                }
+            } catch (e) {
+                console.log(e);
+            }
+            finally {
+                resolve();
+            }
+        });
+    });
+}
+function showMsg() {
+    return new Promise(resolve => {
+        if (!jdNotify) {
+            $.msg($.name, '', `${message}`);
+        } else {
+            $.log(`京东账号${$.index}${$.nickName}\n${message}`);
+        }
+        resolve()
+    })
+}
+function safeGet(data) {
+    try {
+        if (typeof JSON.parse(data) == "object") {
+            return true;
+        }
+    } catch (e) {
+        console.log(e);
+        console.log(`京东服务器访问数据为空，请检查自身设备网络情况`);
+        return false;
+    }
 }
 function jsonParse(str) {
     if (typeof str == "string") {

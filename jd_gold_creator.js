@@ -1,20 +1,8 @@
 /*
 金榜创造营
 活动入口：https://h5.m.jd.com/babelDiy/Zeus/2H5Ng86mUJLXToEo57qWkJkjFPxw/index.html
-活动时间：2021-05-21至2021-12-31
-脚本更新时间：2021-05-28 14:20
-脚本兼容: QuantumultX, Surge, Loon, JSBox, Node.js
-===================quantumultx================
-[task_local]
-#金榜创造营
-13 1,22 * * * jd_gold_creator.js, tag=金榜创造营, img-url=https://raw.githubusercontent.com/Orz-3/mini/master/Color/jd.png, enabled=true
-=====================Loon================
-[Script]
-cron "13 1,22 * * *" script-path=jd_gold_creator.js, tag=金榜创造营
-====================Surge================
-金榜创造营 = type=cron,cronexp="13 1,22 * * *",wake-system=1,timeout=3600,script-path=jd_gold_creator.js
-============小火箭=========
-金榜创造营 = type=cron,script-path=jd_gold_creator.js, cronexpr="13 1,22 * * *", timeout=3600, enable=true
+13 5 * * * jd_gold_creator.js, tag=金榜创造营, img-url=https://raw.githubusercontent.com/Orz-3/mini/master/Color/jd.png, enabled=true
+
  */
 const $ = new Env('金榜创造营');
 const notify = $.isNode() ? require('./sendNotify') : '';
@@ -76,8 +64,11 @@ const JD_API_HOST = 'https://api.m.jd.com/client.action';
 async function main() {
   try {
     await goldCreatorTab();//获取顶部主题
+    await $.wait(1000);
     await getDetail();
+    await $.wait(500);
     await goldCreatorPublish();
+    await $.wait(500);
     await showMsg();
   } catch (e) {
     $.logErr(e)
@@ -97,7 +88,7 @@ async function getDetail() {
   for (let item of $.subTitleInfos) {
     console.log(`\n开始给【${item['longTitle']}】主题下的商品进行投票`);
     await goldCreatorDetail(item['matGrpId'], item['subTitleId'], item['taskId'], item['batchId']);
-    await $.wait(5000);
+    await $.wait(2000);
   }
 }
 function goldCreatorTab() {
@@ -194,7 +185,8 @@ async function doTask(subTitleId, taskId, batchId) {
     "itemId": "1",
     "rankId": $.skuList[randIndex]['rankId'],
     "type": 1,
-    batchId
+    batchId,
+	"version": "2"
   };
   await goldCreatorDoTask(body);
 }
@@ -203,7 +195,7 @@ async function doTask2(batchId) {
     task = task.filter(vo => !!vo && vo['taskStatus'] === 1);
     for (let item of task) {
       console.log(`\n做额外任务：${item['taskName']}`)
-      const body = {"taskId": item['taskId'], "itemId": item['taskItemInfo']['itemId'], "type": item['taskType'], batchId};
+      const body = {"taskId": item['taskId'], "itemId": item['taskItemInfo']['itemId'], "type": item['taskType'], batchId, "version":"2"};
       if (item['taskType'] === 1) {
         body['type'] = 2;
       }
@@ -229,7 +221,7 @@ function goldCreatorDoTask(body) {
             data = JSON.parse(data)
             if (data.code === '0') {
               if (data.result.taskCode === '0') {
-                console.log(`成功，获得 ${data.result.lotteryScore}京豆\n`);
+                console.log(`成功，获得 ${data.result.lotteryScore}京豆`);
                 if (data.result.lotteryScore) $.beans += parseInt(data.result.lotteryScore);
               } else {
                 console.log(`失败：${data.result['taskMsg']}\n`);
@@ -276,13 +268,8 @@ function goldCreatorPublish() {
 }
 function taskUrl(function_id, body = {}) {
   return {
-    url: `${JD_API_HOST}?functionId=${function_id}&body=${escape(JSON.stringify(body))}&appid=content_ecology&clientVersion=10.0.0&client=wh5&eufv=false&uuid=`,
+    url: `${JD_API_HOST}?functionId=${function_id}&body=${escape(JSON.stringify(body))}&appid=content_ecology&clientVersion=11.3.0&client=wh5&jsonp=`,
     headers: {
-      "Accept": "*/*",
-      "Accept-Encoding": "gzip, deflate, br",
-      "Accept-Language": "zh-cn",
-      "Connection": "keep-alive",
-      "Content-Type": "application/x-www-form-urlencoded",
       "Host": "api.m.jd.com",
       "Referer": "https://h5.m.jd.com/",
       "Cookie": cookie,
